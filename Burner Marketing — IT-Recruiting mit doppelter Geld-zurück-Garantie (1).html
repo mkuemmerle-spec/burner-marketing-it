@@ -1861,6 +1861,13 @@ footer{background:#0A0A0A;color:rgba(255,255,255,0.6);padding:64px 0 36px;font-s
         <h3>Garantie jetzt prüfen lassen</h3>
         <p class="form-card-sub">Wir rufen Sie innerhalb weniger Minuten zurück.</p>
         <form id="leadForm" novalidate>
+          <!-- Web3Forms Pflichtfeld -->
+          <input type="hidden" name="access_key" value="e4d32a23-8a19-488a-aa5b-44c851ab1104">
+          <!-- Betreff & Absendername der E-Mail, die bei euch ankommt -->
+          <input type="hidden" name="subject" value="Neue Garantie-Anfrage über burnermarketing.com">
+          <input type="hidden" name="from_name" value="Burner Marketing Website">
+          <!-- Spam-Schutz (Honeypot): von echten Nutzern unsichtbar -->
+          <input type="checkbox" name="botcheck" tabindex="-1" autocomplete="off" style="display:none !important;" aria-hidden="true">
           <div class="form-group">
             <label for="company">Firma *</label>
             <input type="text" id="company" name="company" required autocomplete="organization">
@@ -1922,21 +1929,47 @@ document.querySelectorAll('.faq-q').forEach(btn=>{
   });
 });
 
-// Form Submission
+// Form Submission → Web3Forms
 const form=document.getElementById('leadForm');
 const successMsg=document.getElementById('successMsg');
+const submitBtn=form.querySelector('.form-submit');
+const submitBtnHTML=submitBtn.innerHTML;
 form.addEventListener('submit',async(e)=>{
   e.preventDefault();
+  // Pflichtfelder prüfen (Formular hat novalidate, daher manuell)
+  if(!form.checkValidity()){form.reportValidity();return;}
+
   const data=Object.fromEntries(new FormData(form).entries());
+  // UTM-/Tracking-Parameter aus der URL mitschicken
   const params=new URLSearchParams(location.search);
   ['utm_source','utm_medium','utm_campaign','utm_content','fbclid'].forEach(k=>{if(params.get(k))data[k]=params.get(k);});
-  // TODO: Webhook-URL eintragen — z.B. Make.com / Zapier / eigener Endpoint
-  // await fetch('https://hook.eu1.make.com/YOUR_WEBHOOK_ID',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-  console.log('Lead-Daten:',data);
-  successMsg.classList.add('show');
-  form.reset();
-  successMsg.scrollIntoView({behavior:'smooth',block:'center'});
-  if(typeof fbq!=='undefined'){fbq('track','Lead',{content_name:data.position,content_category:'IT-Recruiting'});}
+
+  submitBtn.disabled=true;
+  submitBtn.innerHTML='Wird gesendet …';
+
+  try{
+    const res=await fetch('https://api.web3forms.com/submit',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Accept':'application/json'},
+      body:JSON.stringify(data)
+    });
+    const json=await res.json();
+
+    if(res.ok && json.success){
+      successMsg.classList.add('show');
+      form.reset();
+      successMsg.scrollIntoView({behavior:'smooth',block:'center'});
+      if(typeof fbq!=='undefined'){fbq('track','Lead',{content_name:data.position,content_category:'IT-Recruiting'});}
+    }else{
+      throw new Error(json.message||'Senden fehlgeschlagen');
+    }
+  }catch(err){
+    console.error('Web3Forms error:',err);
+    alert('Es gab leider ein Problem beim Senden. Bitte versuchen Sie es erneut oder schreiben Sie direkt an umsetzung@burnermarketing.com.');
+  }finally{
+    submitBtn.disabled=false;
+    submitBtn.innerHTML=submitBtnHTML;
+  }
 });
 
 // Header scroll effect + Mobile CTA visibility
